@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title></title>
+
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/3.0.3/normalize.min.css">
+
+    <style type="text/css">
+        .error {
+            color: #ff0000;
+        }
+    </style>
+
+    <script src="https://code.jquery.com/jquery-2.1.4.min.js"></script>
+    <script>
+        var loadFlow = function (authorizationToken, tenantId, flowId, callback) {
+            console.log('Loading flow with ID ' + flowId);
+
+            $.getJSON('https://flow.manywho.com/api/draw/1/flow/' + flowId)
+
+            $.ajax('https://flow.manywho.com/api/draw/1/flow/' + flowId, {
+                method: 'GET',
+                headers: {
+                    'Authorization': authorizationToken,
+                    'ManyWhoTenant': tenantId
+                },
+                success: function (data) {
+                    callback(authorizationToken, tenantId, flowId, data);
+                },
+                error: function (error) {
+                    $('#messages').append('<li class="error">Unable to load flow with ID <code>' + flowId + '</code>: ' + error.status + ' ' + error.statusText + '</li>');
+                }
+            });
+        };
+
+        var loadAndSaveFlow = function (authorizationToken, tenantId, flowId) {
+            loadFlow(authorizationToken, tenantId, flowId, saveFlow);
+        };
+
+        var saveFlow = function (authorizationToken, tenantId, flowId, flow) {
+            console.log('Loading and re-saving flow with ID ' + flowId);
+
+            $.ajax('https://flow.manywho.com/api/draw/1/flow', {
+                method: 'POST',
+                data: JSON.stringify(flow),
+                dataType: 'json',
+                headers: {
+                    'Authorization': authorizationToken,
+                    'Content-Type': 'application/json',
+                    'ManyWhoTenant': tenantId
+                },
+                success: function (data) {
+                    $('#messages').append('<li>Loaded and saved flow with ID <code>' + flowId + '</code> <strong>(' + data.developerName + ')</strong></li>');
+                },
+                error: function (error) {
+                    $('#messages').append('<li class="error">Unable to load and save flow with ID <code>' + flowId + '</code>: ' + error.status + ' ' + error.statusText + '</li>');
+                }
+            });
+        };
+
+        var snapshotFlow = function (authorizationToken, tenantId, flowId, callback) {
+            console.log('Snapshotting flow with ID ' + flowId);
+
+            $.ajax('https://flow.manywho.com/api/draw/1/flow/snap/' + flowId, {
+                method: 'POST',
+                headers: {
+                    'Authorization': authorizationToken,
+                    'ManyWhoTenant': tenantId
+                },
+                success: function (data) {
+                    $('#messages').append('<li>Snapshotted flow with ID <code>' + flowId + '</code> <strong>(' + data.developerName + ')</strong></li>');
+
+                    callback(authorizationToken, tenantId, flowId, data.id.versionId, data.developerName);
+                },
+                error: function (error) {
+                    $('#messages').append('<li class="error">Unable to snapshot flow with ID <code>' + flowId + '</code>: ' + error.status + ' ' + error.statusText + '</li>');
+                }
+            })
+        };
+
+        var activateFlow = function (authorizationToken, tenantId, flowId, flowVersionId, flowName) {
+            console.log('Activating flow with ID ' + flowId + ' and version ' + flowVersionId);
+
+            $.ajax('https://flow.manywho.com/api/draw/1/flow/activation/' + flowId + '/' + flowVersionId + '/true/true', {
+                method: 'POST',
+                headers: {
+                    'Authorization': authorizationToken,
+                    'ManyWhoTenant': tenantId
+                },
+                success: function () {
+                    $('#messages').append('<li>Activated flow with ID <code>' + flowId + '</code> and version <code>' + flowVersionId + '</code> <strong>(' + flowName + ')</strong></li>');
+                },
+                error: function (error) {
+                    $('#messages').append('<li class="error">Unable to activate flow with ID <code>' + flowId + '</code> and version ID <code>' + flowVersionId + '</code>: ' + error.status + ' ' + error.statusText + '</li>');
+                }
+            })
+        };
+
+        var loadAllFlows = function (authorizationToken, tenantId) {
+            $.ajax('https://flow.manywho.com/api/draw/1/flow?filter=', {
+                headers: {
+                    'Authorization': authorizationToken,
+                    'ManyWhoTenant': tenantId
+                },
+                success: function (data) {
+                    if (data != null) {
+                        var index = 0;
+
+                        var interval = setInterval(function () {
+                            var flow = data[index];
+
+                            if (!flow) {
+                                clearInterval(interval);
+                            }
+
+                            loadAndSaveFlow(authorizationToken, tenantId, flow.id.id);
+                            snapshotFlow(authorizationToken, tenantId, flow.id.id, activateFlow);
+
+                            index++;
+                        }, 800);
+                    }
+                },
+                error: function (error) {
+                    $('#messages').append('<li class="error">Unable to load flows: ' + error.status + ' ' + error.statusText + '</li>');
+                }
+            });
+        };
+
+        $(document).ready(function () {
+            $('#activation').submit(function (event) {
+                $('#messages').html('');
+
+                var authorizationToken = $('input[name=authorization-token]').val();
+                var tenantId = $('input[name=tenant-id]').val();
+
+                loadAllFlows(authorizationToken, tenantId);
+
+                event.preventDefault();
+            });
+        });
+    </script>
+</head>
+<body>
+    <div>
+        <form id="activation" action="">
+            <div>
+                <input name="authorization-token" placeholder="Authorization Token" size="100" />
+            </div>
+            <div>
+                <input name="tenant-id" placeholder="Tenant ID" size="40" />
+            </div>
+            <div>
+                <input name="activate" type="submit" value="Activate all flows" />
+            </div>
+        </form>
+
+        <div>
+            <ul id="messages">
+
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
